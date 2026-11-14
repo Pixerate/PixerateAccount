@@ -89,8 +89,12 @@ public final class SystemWebAuthPresenter: NSObject, PixerateWebAuthPresenter, A
 
     public func authenticate(url: URL, callbackScheme: String) async throws -> URL {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { [weak self] callback, error in
-                self?.session = nil
+            // AuthenticationServices calls this on a background queue. Left to inherit this class's
+            // main-actor isolation, the closure trips Swift's executor check there and the app
+            // crashes, so it is @Sendable: it resumes the continuation (safe from any thread) and
+            // hops to the main actor only to let go of the session.
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { @Sendable [weak self] callback, error in
+                Task { @MainActor in self?.session = nil }
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
