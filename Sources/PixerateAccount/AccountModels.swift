@@ -30,6 +30,34 @@ public struct AuthUser: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+/// A subscription an admin granted free of charge. Billing never changes it.
+public struct ComplimentarySubscription: Codable, Sendable, Equatable {
+    /// The plan the grant unlocks, e.g. "pro".
+    public var planId: String
+    /// When the grant ends (ISO 8601). `nil`: it never expires.
+    public var expiresAt: String?
+
+    public init(planId: String, expiresAt: String? = nil) {
+        self.planId = planId
+        self.expiresAt = expiresAt
+    }
+
+    /// The expiry as a `Date`, or `nil` when it never expires or can't be read.
+    public var expiresAtDate: Date? {
+        guard let expiresAt else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: expiresAt) ?? ISO8601DateFormatter().date(from: expiresAt)
+    }
+
+    /// Whether the grant is in effect at `date`. An unreadable expiry counts as expired.
+    public func isActive(at date: Date = Date()) -> Bool {
+        guard expiresAt != nil else { return true }
+        guard let end = expiresAtDate else { return false }
+        return end > date
+    }
+}
+
 public struct Team: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public var name: String
@@ -42,6 +70,8 @@ public struct Team: Codable, Sendable, Equatable, Identifiable {
     public var cancelAtPeriodEnd: Bool?
     public var billingPeriodStart: String?
     public var billingPeriodEnd: String?
+    /// Admin-granted subscription, if any. See `ComplimentarySubscription`.
+    public var complimentary: ComplimentarySubscription?
 
     public init(
         id: String,
@@ -54,7 +84,8 @@ public struct Team: Codable, Sendable, Equatable, Identifiable {
         role: TeamRole? = nil,
         cancelAtPeriodEnd: Bool? = nil,
         billingPeriodStart: String? = nil,
-        billingPeriodEnd: String? = nil
+        billingPeriodEnd: String? = nil,
+        complimentary: ComplimentarySubscription? = nil
     ) {
         self.id = id
         self.name = name
@@ -67,6 +98,7 @@ public struct Team: Codable, Sendable, Equatable, Identifiable {
         self.cancelAtPeriodEnd = cancelAtPeriodEnd
         self.billingPeriodStart = billingPeriodStart
         self.billingPeriodEnd = billingPeriodEnd
+        self.complimentary = complimentary
     }
 
     enum CodingKeys: String, CodingKey {
@@ -81,6 +113,7 @@ public struct Team: Codable, Sendable, Equatable, Identifiable {
         case cancelAtPeriodEnd
         case billingPeriodStart
         case billingPeriodEnd
+        case complimentary
     }
 
     public init(from decoder: Decoder) throws {
@@ -96,6 +129,11 @@ public struct Team: Codable, Sendable, Equatable, Identifiable {
         self.cancelAtPeriodEnd = try container.decodeIfPresent(Bool.self, forKey: .cancelAtPeriodEnd)
         self.billingPeriodStart = try container.decodeIfPresent(String.self, forKey: .billingPeriodStart)
         self.billingPeriodEnd = try container.decodeIfPresent(String.self, forKey: .billingPeriodEnd)
+        // A malformed grant (e.g. a raw Firestore Timestamp) shouldn't fail the whole team.
+        self.complimentary = try? container.decodeIfPresent(
+            ComplimentarySubscription.self,
+            forKey: .complimentary
+        )
     }
 }
 

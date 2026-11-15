@@ -56,6 +56,24 @@ final class PixerateAccountTests: XCTestCase {
         XCTAssertNil(store.loadSelectedTeamId())
     }
 
+    func testComplimentarySubscriptionDecoding() throws {
+        let json = Data("""
+        {"teams": [
+          {"id": "t1", "name": "A", "complimentary": {"planId": "pro", "expiresAt": "2030-01-01T00:00:00.000Z", "reason": "press"}},
+          {"id": "t2", "name": "B", "complimentary": {"planId": "pro"}},
+          {"id": "t3", "name": "C", "complimentary": {"planId": "pro", "expiresAt": {"_seconds": 1}}},
+          {"id": "t4", "name": "D"}
+        ]}
+        """.utf8)
+        let teams = try JSONDecoder().decode(TeamsListResponse.self, from: json).teams
+        XCTAssertEqual(teams[0].complimentary?.planId, "pro")
+        XCTAssertTrue(teams[0].complimentary?.isActive(at: Date(timeIntervalSince1970: 0)) ?? false)
+        XCTAssertFalse(teams[0].complimentary?.isActive(at: Date(timeIntervalSince1970: 2_000_000_000)) ?? true)
+        XCTAssertTrue(teams[1].complimentary?.isActive() ?? false)
+        XCTAssertNil(teams[2].complimentary)
+        XCTAssertNil(teams[3].complimentary)
+    }
+
     func testModelDecoding() throws {
         let json = """
         {
