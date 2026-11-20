@@ -11,15 +11,28 @@ let package = Package(
         .library(
             name: "PixerateAccount",
             targets: ["PixerateAccount"]
+        ),
+        .library(
+            name: "PixerateStore",
+            targets: ["PixerateStore"]
         )
     ],
     targets: [
         .target(
             name: "PixerateAccount"
         ),
+        .target(
+            name: "PixerateStore",
+            dependencies: ["PixerateAccount"]
+        ),
         .testTarget(
             name: "PixerateAccountTests",
             dependencies: ["PixerateAccount"]
+        ),
+        .testTarget(
+            name: "PixerateStoreTests",
+            dependencies: ["PixerateStore", "PixerateAccount"],
+            resources: [.copy("PixerateStoreTests.storekit")]
         )
     ]
 )
